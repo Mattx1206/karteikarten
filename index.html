@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Karteikarten – Lernen mit KI</title>
+<meta name="description" content="Kostenlose Karteikarten-App: Word, PowerPoint oder Notizen hochladen und mit KI automatisch Frage-Antwort-Karten erstellen. Antworten eintippen oder einsprechen und automatisch als richtig/falsch bewerten lassen.">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f5fb;
+    --card: #ffffff;
+    --ink: #1d2033;
+    --muted: #6b7089;
+    --line: #e5e7f2;
+    --accent: #6366f1;
+    --accent2: #8b5cf6;
+    --grad: linear-gradient(135deg, #6366f1, #8b5cf6);
+    --green: #10b981;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --radius: 16px;
+    --shadow: 0 8px 30px rgba(40, 45, 90, .08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 20px 20px 60px; }
+
+  header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+  .logo { width: 42px; height: 42px; border-radius: 12px; background: var(--grad); display: grid; place-items: center; color: #fff; font-size: 21px; box-shadow: var(--shadow); flex: none; }
+  header h1 { font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+  header .sub { font-size: 12.5px; color: var(--muted); }
+  .spacer { flex: 1; }
+
+  select, .btn, input[type="text"] { font: inherit; }
+  select {
+    padding: 9px 34px 9px 12px; border-radius: 10px; border: 1px solid var(--line);
+    background: #fff url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="%236b7089" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg>') no-repeat right 10px center;
+    appearance: none; -webkit-appearance: none; cursor: pointer; font-weight: 600; font-size: 13.5px; color: var(--ink);
+    max-width: 240px; text-overflow: ellipsis;
+  }
+  .btn {
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+    padding: 9px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 13.5px;
+    display: inline-flex; align-items: center; gap: 7px; transition: .15s; white-space: nowrap;
+  }
+  .btn:hover { border-color: #c9cdea; transform: translateY(-1px); }
+  .btn.primary { background: var(--grad); color: #fff; border: none; box-shadow: 0 4px 14px rgba(99, 102, 241, .35); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--red); transform: none; }
+  .btn.small { padding: 6px 10px; font-size: 12.5px; border-radius: 8px; }
+  .btn:disabled { opacity: .5; cursor: default; transform: none; }
+
+  nav.tabs { display: flex; gap: 6px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 5px; width: max-content; margin-bottom: 22px; box-shadow: var(--shadow); }
+  nav.tabs button {
+    border: none; background: transparent; padding: 8px 18px; border-radius: 8px; cursor: pointer;
+    font: inherit; font-weight: 600; font-size: 13.5px; color: var(--muted); transition: .15s;
+  }
+  nav.tabs button.active { background: var(--grad); color: #fff; box-shadow: 0 3px 10px rgba(99, 102, 241, .3); }
+
+  /* ---------- Lernmodus ---------- */
+  .study-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .pill { background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; color: var(--muted); }
+  .progress { flex: 1; min-width: 140px; height: 8px; background: #e4e6f4; border-radius: 99px; overflow: hidden; }
+  .progress > div { height: 100%; background: var(--grad); border-radius: 99px; transition: width .3s; }
+
+  .stage { perspective: 1400px; }
+  .flashcard {
+    position: relative; width: 100%; min-height: 320px; cursor: pointer;
+    transform-style: preserve-3d; transition: transform .55s cubic-bezier(.2, .7, .25, 1);
+  }
+  .flashcard.flipped { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    background: var(--card); border-radius: 22px; box-shadow: var(--shadow); border: 1px solid var(--line);
+    display: flex; flex-direction: column; padding: 28px; overflow: auto;
+  }
+  .face .tag { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 16px; }
+  .face.front .tag { color: var(--accent); }
+  .face.back { transform: rotateY(180deg); background: linear-gradient(160deg, #ffffff, #f6f4ff); }
+  .face.back .tag { color: var(--accent2); }
+  .face .txt { flex: 1; display: grid; place-items: center; text-align: center; font-size: 20px; line-height: 1.5; font-weight: 600; white-space: pre-wrap; }
+  .face.back .txt { font-size: 17px; font-weight: 500; }
+  .face .hint { text-align: center; color: var(--muted); font-size: 12px; margin-top: 14px; }
+
+  .study-actions { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+  .btn.wrong { border: none; background: #fdecec; color: var(--red); }
+  .btn.right { border: none; background: #e5f8f1; color: #0b8f66; }
+  .btn.wrong:hover, .btn.right:hover { filter: brightness(.96); }
+
+  .done { background: var(--card); border-radius: 22px; border: 1px solid var(--line); box-shadow: var(--shadow); padding: 44px 28px; text-align: center; }
+  .done .emoji { font-size: 44px; }
+  .done h2 { margin: 12px 0 6px; }
+  .done p { color: var(--muted); margin-bottom: 20px; }
+  .stats { display: flex; gap: 12px; justify-content: center; margin-bottom: 24px; }
+  .stat { background: var(--bg); border-radius: 14px; padding: 14px 22px; }
+  .stat b { display: block; font-size: 22px; }
+  .stat span { font-size: 12px; color: var(--muted); }
+
+  /* ---------- Antwort-Eingabe im Lernmodus ---------- */
+  .answerbox { margin-top: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; box-shadow: 0 2px 10px rgba(40, 45, 90, .04); }
+  .answerbox textarea { min-height: 64px; background: #fff; }
+  .answerbox .row { margin-top: 10px; }
+  .mic { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 18px; cursor: pointer; flex: none; transition: .15s; }
+  .mic:hover { border-color: #c9cdea; }
+  .mic.rec { background: #fdecec; border-color: var(--red); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, .35); } 70% { box-shadow: 0 0 0 12px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+  .verdict { border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+  .verdict.ok { background: #e5f8f1; color: #0b8f66; }
+  .verdict.no { background: #fdecec; color: var(--red); }
+  .verdict .fb { font-weight: 500; margin-top: 4px; font-size: 12.5px; }
+  .useranswer { font-size: 12.5px; color: var(--muted); margin-top: 12px; white-space: pre-wrap; text-align: center; }
+
+  /* ---------- Editor ---------- */
+  .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+  .search { flex: 1; min-width: 160px; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: #fff; font-size: 13.5px; }
+  .search:focus, textarea:focus, input:focus, select:focus { outline: 2px solid rgba(99, 102, 241, .35); outline-offset: 1px; }
+  .cardrow {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(40, 45, 90, .04);
+    display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: start;
+  }
+  .cardrow .num { color: var(--muted); font-size: 12.5px; font-weight: 700; padding-top: 10px; text-align: right; }
+  .fields { display: grid; gap: 8px; }
+  .fields label { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    font: inherit; font-size: 14px; line-height: 1.45; resize: vertical; min-height: 42px; background: #fbfbfe;
+  }
+  textarea.empty-a { border-color: #f3d9a4; background: #fffdf4; }
+  .rowbtns { display: flex; flex-direction: column; gap: 6px; }
+  .empty-note { font-size: 11.5px; color: var(--amber); font-weight: 600; }
+
+  /* ---------- Import ---------- */
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; margin-bottom: 18px; }
+  .panel h3 { font-size: 15px; margin-bottom: 4px; }
+  .panel .desc { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+  .drop {
+    border: 2px dashed #c9cdea; border-radius: 14px; padding: 34px 20px; text-align: center;
+    cursor: pointer; transition: .15s; background: #fbfbfe;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #f4f3ff; }
+  .drop .big { font-size: 34px; margin-bottom: 8px; }
+  .drop b { display: block; margin-bottom: 4px; }
+  .drop span { font-size: 12.5px; color: var(--muted); }
+  .paste-area { width: 100%; min-height: 130px; margin-bottom: 12px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .status { font-size: 13px; font-weight: 600; margin-top: 12px; display: none; align-items: center; gap: 9px; }
+  .status.show { display: flex; }
+  .spinner { width: 16px; height: 16px; border: 2.5px solid #dcdcf5; border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .warn { background: #fff8ec; border: 1px solid #f3e3bd; color: #8a6417; border-radius: 10px; padding: 10px 14px; font-size: 12.5px; margin-top: 12px; display: none; }
+  .warn.show { display: block; }
+
+  .preview-list { margin-top: 16px; display: none; }
+  .preview-list.show { display: block; }
+  .prevcard { background: #fbfbfe; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; display: flex; gap: 10px; align-items: flex-start; }
+  .prevcard input[type="checkbox"] { margin-top: 4px; accent-color: var(--accent); width: 15px; height: 15px; }
+  .prevcard .q { font-weight: 600; font-size: 13.5px; }
+  .prevcard .a { font-size: 13px; color: var(--muted); margin-top: 3px; white-space: pre-wrap; }
+
+  .empty-state { text-align: center; color: var(--muted); padding: 60px 20px; }
+  .empty-state .big { font-size: 40px; margin-bottom: 10px; }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: #23263b; color: #fff; padding: 11px 20px; border-radius: 12px; font-size: 13.5px; font-weight: 600;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25); transition: transform .3s; z-index: 99; max-width: 90vw;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 560px) {
+    .cardrow { grid-template-columns: 1fr; }
+    .cardrow .num { display: none; }
+    .rowbtns { flex-direction: row; }
+    .face .txt { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">🗂️</div>
+    <div>
+      <h1>Karteikarten</h1>
+      <div class="sub" id="headerSub">Lernen leicht gemacht</div>
+    </div>
+    <div class="spacer"></div>
+    <select id="deckSelect" title="Stapel wählen"></select>
+    <button class="btn small" id="renameDeck" title="Stapel umbenennen">✏️</button>
+    <button class="btn small" id="deleteDeck" title="Stapel löschen">🗑️</button>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="study" class="active">🎓 Lernen</button>
+    <button data-tab="edit">📝 Karten</button>
+    <button data-tab="import">⬆️ Import & KI</button>
+  </nav>
+
+  <!-- ================= LERNEN ================= -->
+  <section id="tab-study"></section>
+
+  <!-- ================= EDITOR ================= -->
+  <section id="tab-edit" hidden>
+    <div class="toolbar">
+      <input class="search" id="searchBox" type="text" placeholder="Karten durchsuchen…">
+      <button class="btn primary" id="addCard">＋ Neue Karte</button>
+    </div>
+    <div id="cardList"></div>
+  </section>
+
+  <!-- ================= IMPORT ================= -->
+  <section id="tab-import" hidden>
+    <div class="panel">
+      <h3>Datei hochladen</h3>
+      <div class="desc">Word (.docx), PowerPoint (.pptx), Text- oder Markdown-Datei – die KI erstellt daraus automatisch Fragen &amp; Antworten.</div>
+      <div class="drop" id="dropZone">
+        <div class="big">📄</div>
+        <b>Datei hierher ziehen oder klicken</b>
+        <span>.docx · .pptx · .txt · .md</span>
+        <input type="file" id="fileInput" accept=".docx,.pptx,.txt,.md,.text" hidden>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Oder Notizen einfügen</h3>
+      <div class="desc">Text hier einfügen und Karteikarten generieren lassen.</div>
+      <textarea class="paste-area" id="pasteArea" placeholder="Lernstoff, Notizen oder Fragen hier einfügen…"></textarea>
+      <div class="row">
+        <button class="btn primary" id="genFromPaste">✨ Mit KI Karteikarten erstellen</button>
+      </div>
+    </div>
+
+    <div class="panel" id="importResult" style="display:none">
+      <h3 id="importTitle">Erstellte Karten</h3>
+      <div class="desc" id="importDesc"></div>
+      <div class="status" id="importStatus"><div class="spinner"></div><span id="importStatusTxt"></span></div>
+      <div class="warn" id="importWarn"></div>
+      <div class="preview-list" id="previewList"></div>
+      <div class="row" style="margin-top:16px" id="importActions" hidden>
+        <select id="importTarget"></select>
+        <button class="btn primary" id="importConfirm">Ausgewählte Karten übernehmen</button>
+        <button class="btn" id="importCancel">Verwerfen</button>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ============================================================
+   Daten & Persistenz
+   ============================================================ */
+const LS_KEY = "karteikarten-app-v1";
+const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
+const SEED = [
+["Welche Voraussetzungen müssen gegeben sein, um ein Milk-Run-Beschaffungssystem erfolgreich zu installieren?","Planbare Materialbedarfe, hohe Lieferantenkooperation, günstiges Lieferantennetzwerk (räumliche Nähe), passende IT und Infrastruktur."],
+["Aus welchen 5 Komponenten setzt sich der Lieferservice zusammen?","Lieferzeit, Lieferqualität, Lieferinformation, Lieferzuverlässigkeit, Lieferflexibilität."],
+["Erklären Sie den Begriff gebundenes Kapital.","Finanzielle Mittel, die in Vermögenswerten (z. B. Maschinen, Lagerbestände) gebunden sind. Die Firma hat das Geld nicht am Konto und kann damit nicht direkt zahlen."],
+["Was versteht man unter Cross Docking und welches Ziel verfolgt es?","Die Ware wird nicht eingelagert, sondern direkt umgeschlagen und weiterverarbeitet bzw. weitertransportiert. Ziel: Reduzierung der Lagerbestände. Die Ware bleibt meist nur wenige Stunden im Lager."],
+["Erklären Sie variable Kosten und fixe Kosten und nennen Sie Beispiele.","Variable Kosten: ändern sich mit der Produktions-/Transportmenge (z. B. Treibstoff, Material).\nFixe Kosten: fallen unabhängig von der Menge an (z. B. Miete, Versicherungen, Leasingraten)."],
+["Welche Versicherungen muss ich für einen LKW einplanen?","KFZ-Versicherung, Haftpflicht, Teilkasko + Vollkasko."],
+["Erklären Sie den Begriff Deckungsbeitrag.","Der Betrag (Erlös minus variable Kosten), der zur Deckung der Fixkosten beiträgt."],
+["Kann es sinnvoll sein, einen Auftrag anzunehmen, wenn der DB nur einen Teil der Fixkosten abdeckt?","Ja – die Fixkosten fallen ohnehin an. Jeder positive Deckungsbeitrag verringert den Fixkostenblock."],
+["Was verstehen wir unter Werksverkehr?","Transport mit eigenen LKW und eigenen Fahrern des Unternehmens (z. B. Spar)."],
+["Was verstehen wir unter Selbsteintrittsrecht?","Der Spediteur kann die Fahrt selbst durchführen. Er haftet dann nach dem Recht des Frachtführers."],
+["Erklären Sie den Begriff Kabotage.","Wenn ein ausländisches Unternehmen Transporte innerhalb eines anderen Landes (Inlandstransporte) durchführt."],
+["Was ist Transitverkehr?","Transporte, die durch mehrere Länder führen."],
+["Erklären Sie den Begriff Wechselaufbauten (WAB) und nennen Sie den Vorteil.","Austauschbare Ladungsträger mit Stützfüßen. Vorteil: können einfach abgestellt und gelagert werden, Hübe mit dem Kran sind sehr einfach."],
+["Nennen Sie einige Maßnahmen gegen Palettenschwund.","Gutes technisches Erfassungssystem (z. B. Excel/Palettenkonto), klare Tauschbedingungen, physische Sicherungsmaßnahmen."],
+["Erklären Sie das Transportsystem „Sammelgutverkehr“.","Kleinere Sendungen mehrerer Kunden werden gebündelt (gesammelt) und gemeinsam mit einem LKW transportiert, danach verteilt."],
+["Was verstehen Sie unter kombiniertem Verkehr?","Verkehr mit mindestens 2 Verkehrsträgern, z. B. Schiene + Straße."],
+["Nennen Sie die 3 Hauptkostenfaktoren im LKW-Verkehr.","Treibstoff, Personal, Versicherungen."],
+["Erklären Sie den Begriff Road Pricing.","Maut – man zahlt für die Benutzung eines Streckenabschnitts."],
+["Welche Lagerarten unterscheiden wir nach dem Zweck der Einlagerung?","Vorratslager (Dauerlager), Umschlagslager, Verteillager (Distributionslager), Kommissionierlager."],
+["Welche Lagerart ist typisch für Lager im Sammelgutverkehr?","Umschlagslager → Cross Docking, kurze Lagerzeiten."],
+["Welche Auswirkungen hat ein Vorratslager/Dauerlager auf die Kapitalbindung?","Hohe Kapitalbindung (gebundenes Kapital). Eher schlecht: Die Ware ist noch nicht verkauft, hohe Lagerbestände kosten Geld."],
+["Welche Lagerarten unterscheiden wir nach der Art der Bauweise?","Freilager, überdachtes (halboffenes) Lager, geschlossenes Lager (Hallenlager), Etagenlager, Hochregallager."],
+["Welche Lagerarten unterscheiden wir nach der Art der Einrichtung?","Bodenlagerung (Blocklager, Reihenlager) und Regallagerung (verschiedene Regaltypen)."],
+["Was bedeutet Blocklagerung und worauf ist dabei besonders zu achten?","Ladeeinheiten werden ohne Regale dicht an- und übereinandergestapelt. Zu beachten: Stapelfähigkeit/Druckfestigkeit der Ware, kein direkter Zugriff auf einzelne Paletten (LIFO)."],
+["Welche Arten von Regallagern kennen Sie?","Fachbodenregal, Palettenregal, Durchlaufregal, Verschieberegal, Kragarmregal, Umlaufregal (Paternoster), Hochregal."],
+["Ab welcher Höhe spricht man von einem HRL? Wie hoch kann ein HRL gebaut werden?","Ab ca. 12 Metern; gebaut werden kann bis ca. 40 Meter Höhe."],
+["Welches Regalsystem eignet sich besonders für Waren mit Verfallsdatum und nach welchem Prinzip erfolgt die Lagerung?","Durchlaufregal – Lagerung nach dem FIFO- bzw. FEFO-Prinzip."],
+["Welches Regalsystem eignet sich besonders zur Lagerung von Langgut (z. B. lange Kunststoffrohre)?","Kragarmregal."],
+["Was ist ein AKL und nach welchem Prinzip arbeitet es?","Automatisches Kleinteilelager: Behälterlager mit automatischem Regalbediengerät. Es arbeitet nach dem Prinzip „Ware zum Mann“ (dynamisch)."],
+["Nennen Sie den größten Vorteil und Nachteil eines Verschieberegals.","Vorteil: sehr platzsparend – keine festen Gänge, das Regal wird nur bei Bedarf geöffnet. Nachteil: technische Abhängigkeit, langsamerer Zugriff."],
+["Unterschied zwischen Doppelspiel und Einzelspiel?","Einzelspiel: nur Einlagerung ODER Auslagerung pro Fahrt.\nDoppelspiel: Einlagerung + Auslagerung in einer Fahrt kombiniert."],
+["Welchen Vorteil bieten Lagerbühnen?","Sie nutzen die Raumhöhe aus und schaffen zusätzliche Lagerfläche ohne Gebäudeerweiterung."],
+["Erklären Sie den Unterschied zwischen LIFO und FIFO.","LIFO: Last in – first out. FIFO: First in – first out."],
+["Was ist der Unterschied zwischen dynamischer und statischer Materialbereitstellung?","Dynamisch: Ware zum Mann. Statisch: Mann zur Ware."],
+["Wird ein AKL statisch oder dynamisch betrieben?","Dynamisch – die Ware kommt automatisch zum Mann (Ware-zum-Mann-Prinzip)."],
+["Welche Vorteile bieten Reihenlager gegenüber Blocklagern?","Direkter Zugriff auf jede Ladeeinheit, FIFO möglich, keine Umlagerungen nötig."],
+["Was verstehen wir unter chaotischer Lagerung?","Waren werden ohne feste Platzordnung eingelagert – ohne festes System (freie Lagerplatzvergabe)."],
+["Welchen Nachteil hat die chaotische Lagerplatzzuordnung?","Ohne gutes IT-System: langes Suchen, keine Ordnung – es dauert länger, die Ware zu finden."],
+["Was verstehen wir unter einem I-Punkt im WE?","Der Informations-/Identifikationspunkt beim Wareneingang. Hier werden die Daten der Waren erfasst."],
+["Was verstehen wir unter einem K-Punkt im WA?","Der Kontrollpunkt beim Warenausgang. Hier werden Ware und Daten nochmals kontrolliert."],
+["Erklären Sie den Begriff Kommissionierung.","Zusammenstellen von Waren nach einem Kundenauftrag."],
+["Was unterscheidet ein Einheitenlager vom Kommissionierlager?","Einheitenlager: ganze Ladeeinheiten (z. B. Paletten) werden ein- und ausgelagert.\nKommissionierlager: Einzelmengen/Teilmengen werden für Aufträge entnommen."],
+["Wie nennt man die Gänge zwischen den Regalen?","Gassen."],
+["Erklären Sie die Begriffe FIFO, LIFO, FEFO.","FIFO: First in – first out.\nLIFO: Last in – first out.\nFEFO: First expired – first out."],
+["Nennen Sie fünf typische Probleme für Läger, die nicht leistungs- und kostenoptimal geplant wurden.","Zu geringe Lagerkapazität, lange Wege/Fahrzeiten, Engpässe im Wareneingang/-ausgang, hohe Lager- und Personalkosten, schlechte Auslastung von Technik und Personal, fehlende Erweiterungsmöglichkeiten."],
+["In welche 4 Projektphasen lässt sich ein Planungsprozess unterteilen?","1. Analyse/Grundlagenermittlung, 2. Grobplanung, 3. Feinplanung (Detailplanung), 4. Realisierung (inkl. Inbetriebnahme)."],
+["Welche grundsätzlichen Anforderungen müssen moderne Lagersysteme erfüllen?","Flexibilität, Wirtschaftlichkeit, kurze Durchlaufzeiten, hohe Raum- und Flächennutzung, Erweiterbarkeit, IT-Anbindung, Ergonomie und Sicherheit."],
+["Was ist der Meldebestand und wozu dient er?","Der Bestand, bei dessen Erreichen wieder Ware nachbestellt/nachgefüllt werden muss."],
+["Wozu dient der Mindestbestand?","Eiserne Reserve: Absicherung bei Störungen in der Produktion oder Lieferkette. Er wird erst angegriffen, wenn kaum noch Ware im Lager ist."],
+["Welche grundsätzlichen Kommissioniersysteme kennen Sie?","Mann zur Ware (statisch) und Ware zum Mann (dynamisch); beleggeführt oder beleglos (z. B. Pick by Voice, Pick by Light, Scanner)."],
+["In welche Bereiche lässt sich ein Kommissioniervorgang unterteilen?","Fortbewegung zum Lagerplatz, Entnahme (Pick), Abgabe/Transport der Ware, Informationsverarbeitung."],
+["Erklären Sie den Unterschied zwischen einzonigem und mehrzonigem Kommissionierverfahren.","Einzonig: ein Kommissionierer bearbeitet den ganzen Auftrag im gesamten Lager.\nMehrzonig: das Lager ist in Zonen geteilt, der Auftrag wird zonenweise (von mehreren Personen) bearbeitet."],
+["Erklären Sie den Unterschied zwischen auftragsbezogenem und artikelbezogenem Kommissionieren.","Auftragsbezogen: jeder Auftrag wird einzeln komplett kommissioniert.\nArtikelbezogen (serienorientiert): mehrere Aufträge werden zusammengefasst, artikelweise gesammelt und danach auf die Aufträge aufgeteilt."],
+["Welche Lagerarten sind dynamisch und welche statisch?","Dynamisch: Durchlaufregal, Umlaufregal (Paternoster), Verschieberegal, AKL.\nStatisch: Blocklager, Fachbodenregal, Palettenregal."]
+];
+
+let state = load();
+function load() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) { const s = JSON.parse(raw); if (s && s.decks && s.decks.length) return s; }
+  } catch (e) {}
+  const deck = { id: uid(), name: "Logistik & Lager", cards: SEED.map(([q, a]) => ({ id: uid(), q, a })) };
+  return { decks: [deck], activeDeckId: deck.id };
+}
+function save() { try { localStorage.setItem(LS_KEY, JSON.stringify(state)); } catch (e) {} }
+function deck() { return state.decks.find(d => d.id === state.activeDeckId) || state.decks[0]; }
+
+/* ============================================================
+   Helfer
+   ============================================================ */
+const $ = s => document.querySelector(s);
+function esc(s) { const d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+function toast(msg) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2600);
+}
+function decodeEntities(s) { const ta = document.createElement("textarea"); ta.innerHTML = s; return ta.value; }
+
+/* ============================================================
+   ZIP-Reader (für .docx / .pptx) – ohne externe Bibliothek
+   ============================================================ */
+async function inflateRaw(u8) {
+  const ds = new DecompressionStream("deflate-raw");
+  const stream = new Blob([u8]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+async function unzip(buf) {
+  const u8 = new Uint8Array(buf);
+  const dv = new DataView(buf);
+  // End of Central Directory suchen
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 66000); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("Kein gültiges ZIP/Office-Format");
+  const count = dv.getUint16(eocd + 10, true);
+  let off = dv.getUint32(eocd + 16, true);
+  const entries = {};
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    const method = dv.getUint16(off + 10, true);
+    const compSize = dv.getUint32(off + 20, true);
+    const nameLen = dv.getUint16(off + 28, true);
+    const extraLen = dv.getUint16(off + 30, true);
+    const commentLen = dv.getUint16(off + 32, true);
+    const localOff = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(off + 46, off + 46 + nameLen));
+    entries[name] = { method, compSize, localOff };
+    off += 46 + nameLen + extraLen + commentLen;
+  }
+  return {
+    names: Object.keys(entries),
+    async file(name) {
+      const e = entries[name];
+      if (!e) return null;
+      const lo = e.localOff;
+      const nameLen = dv.getUint16(lo + 26, true);
+      const extraLen = dv.getUint16(lo + 28, true);
+      const start = lo + 30 + nameLen + extraLen;
+      const data = u8.subarray(start, start + e.compSize);
+      const out = e.method === 0 ? data : await inflateRaw(data);
+      return new TextDecoder().decode(out);
+    }
+  };
+}
+function stripXml(xml) {
+  return decodeEntities(xml.replace(/<[^>]+>/g, "")).replace(/[ \t]+/g, " ").trim();
+}
+async function extractDocx(buf) {
+  const z = await unzip(buf);
+  const xml = await z.file("word/document.xml");
+  if (!xml) throw new Error("word/document.xml nicht gefunden");
+  return xml.replace(/<\/w:p>/g, "\n").split("\n").map(stripXml).filter(Boolean).join("\n");
+}
+async function extractPptx(buf) {
+  const z = await unzip(buf);
+  const slides = z.names.filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+    .sort((a, b) => parseInt(a.match(/\d+/g).pop()) - parseInt(b.match(/\d+/g).pop()));
+  if (!slides.length) throw new Error("Keine Folien gefunden");
+  const parts = [];
+  for (const s of slides) {
+    const xml = await z.file(s);
+    const texts = [...xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g)].map(m => decodeEntities(m[1]));
+    if (texts.length) parts.push("Folie " + s.match(/\d+/g).pop() + ":\n" + texts.join("\n"));
+  }
+  return parts.join("\n\n");
+}
+
+/* ============================================================
+   KI-Generierung (Claude über Cowork) + Fallback-Parser
+   ============================================================ */
+const hasCowork = () => !!(window.cowork && typeof window.cowork.askClaude === "function");
+let aiMode = "unknown"; // "on" | "off" | "unknown"
+
+async function apiPost(path, body) {
+  let r;
+  try {
+    r = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  } catch (e) { aiMode = "off"; throw new Error("no-ai"); }
+  if (r.status === 404 || r.status === 501) { aiMode = "off"; throw new Error("no-ai"); }
+  if (!r.ok) {
+    let msg = "Serverfehler (" + r.status + ")";
+    try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
+    throw new Error(msg);
+  }
+  aiMode = "on";
+  return r.json();
+}
+
+function coworkText(res) {
+  return typeof res === "object" ? (res.text || res.completion || res.response || JSON.stringify(res)) : String(res == null ? "" : res);
+}
+function extractJson(t, open, close) {
+  const s = t.indexOf(open), e = t.lastIndexOf(close);
+  if (s < 0 || e <= s) return null;
+  try { return JSON.parse(t.slice(s, e + 1)); } catch (err) { return null; }
+}
+
+async function aiGenerateCards(text, statusCb) {
+  const chunks = [];
+  const CH = 7000;
+  for (let i = 0; i < text.length; i += CH) chunks.push(text.slice(i, i + CH));
+  const all = [];
+  for (let i = 0; i < chunks.length; i++) {
+    statusCb && statusCb(chunks.length > 1 ? `KI erstellt Karteikarten… (Teil ${i + 1}/${chunks.length})` : "KI erstellt Karteikarten…");
+    if (hasCowork()) {
+      const prompt = `Du bist ein Lern-Assistent. Erstelle aus dem folgenden Lernmaterial deutsche Karteikarten (Frage-Antwort-Paare).
+Regeln:
+- Wenn der Text bereits Fragen enthält, übernimm sie und formuliere vollständige, korrekte Antworten (auch für unbeantwortete Fragen).
+- Sonst erstelle sinnvolle Fragen zu den wichtigsten Fakten und Konzepten.
+- Antworten kurz, präzise und prüfungstauglich.
+- Antworte AUSSCHLIESSLICH mit einem JSON-Array, ohne weiteren Text, im Format:
+[{"q":"Frage","a":"Antwort"}]
+
+LERNMATERIAL:
+${chunks[i]}`;
+      const arr = extractJson(coworkText(await window.cowork.askClaude(prompt, [chunks[i]])), "[", "]");
+      if (Array.isArray(arr)) {
+        aiMode = "on";
+        all.push(...arr.map(x => ({ q: String(x.q || x.frage || x.question || "").trim(), a: String(x.a || x.antwort || x.answer || "").trim() })).filter(x => x.q));
+      }
+    } else {
+      const j = await apiPost("/api/generate", { text: chunks[i] });
+      if (j && Array.isArray(j.cards)) all.push(...j.cards.filter(x => x && x.q));
+    }
+  }
+  return all;
+}
+
+
+
+// Fallback ohne KI: Zeilen mit "?" = Frage, folgende Zeilen = Antwort
+function heuristicCards(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim());
+  const cards = [];
+  let cur = null;
+  for (const line of lines) {
+    if (!line) continue;
+    const isQ = /\?\s*$/.test(line) || (/^(was|wie|warum|wieso|welche|welcher|welches|wozu|nenne|nennen|erkläre|erklären|beschreibe|definiere|unterschied)/i.test(line) && line.length < 160);
+    if (isQ) {
+      if (cur) cards.push(cur);
+      cur = { q: line, a: "" };
+    } else if (cur) {
+      cur.a += (cur.a ? "\n" : "") + line;
+    }
+  }
+  if (cur) cards.push(cur);
+  return cards.filter(c => c.q);
+}
+
+/* ============================================================
+   UI: Header / Stapel
+   ============================================================ */
+function renderHeader() {
+  const sel = $("#deckSelect");
+  sel.innerHTML = state.decks.map(d =>
+    `<option value="${d.id}" ${d.id === state.activeDeckId ? "selected" : ""}>${esc(d.name)} (${d.cards.length})</option>`
+  ).join("") + `<option value="__new__">＋ Neuer Stapel…</option>`;
+  const d = deck();
+  $("#headerSub").textContent = d.cards.length + " Karten · " + state.decks.length + (state.decks.length === 1 ? " Stapel" : " Stapel");
+}
+$("#deckSelect").addEventListener("change", e => {
+  if (e.target.value === "__new__") {
+    const name = prompt("Name des neuen Stapels:", "Neuer Stapel");
+    if (name) {
+      const d = { id: uid(), name: name.trim(), cards: [] };
+      state.decks.push(d); state.activeDeckId = d.id;
+    }
+  } else {
+    state.activeDeckId = e.target.value;
+  }
+  session = null; save(); renderAll();
+});
+$("#renameDeck").addEventListener("click", () => {
+  const d = deck();
+  const name = prompt("Stapel umbenennen:", d.name);
+  if (name && name.trim()) { d.name = name.trim(); save(); renderAll(); }
+});
+$("#deleteDeck").addEventListener("click", () => {
+  const d = deck();
+  if (!confirm(`Stapel „${d.name}“ mit ${d.cards.length} Karten wirklich löschen?`)) return;
+  state.decks = state.decks.filter(x => x.id !== d.id);
+  if (!state.decks.length) state.decks.push({ id: uid(), name: "Mein Stapel", cards: [] });
+  state.activeDeckId = state.decks[0].id;
+  session = null; save(); renderAll(); toast("Stapel gelöscht");
+});
+
+/* ============================================================
+   UI: Tabs
+   ============================================================ */
+let activeTab = "study";
+document.querySelectorAll("nav.tabs button").forEach(b => {
+  b.addEventListener("click", () => {
+    activeTab = b.dataset.tab;
+    document.querySelectorAll("nav.tabs button").forEach(x => x.classList.toggle("active", x === b));
+    ["study", "edit", "import"].forEach(t => $("#tab-" + t).hidden = t !== activeTab);
+    if (activeTab === "study") renderStudy();
+    if (activeTab === "edit") renderEditor();
+  });
+});
+
+/* ============================================================
+   UI: Lernmodus
+   ============================================================ */
+let session = null;
+
+/* --- Antwort-Prüfung (Tippen / Sprechen) --- */
+let recog = null;
+function stopMic() { if (recog) { try { recog.stop(); } catch (e) {} recog = null; } }
+
+const STOPWORDS = new Set("eine einer eines einem einen der die das dass sind wird werden also aber auch beim dann denn doch durch für haben hier kann können mehr muss müssen nach nicht noch oder sich sein sehr über und unter vom von wenn zum zur meist immer wieder".split(" "));
+function normTokens(s) {
+  return String(s).toLowerCase().replace(/[^a-zäöüß0-9\s-]/g, " ").split(/\s+/).filter(w => w.length > 3 && !STOPWORDS.has(w));
+}
+function localCheck(correct, user) {
+  const c = normTokens(correct), u = normTokens(user);
+  if (!c.length || !u.length) return { ok: false, feedback: "Antwort zu kurz für einen Vergleich." };
+  let hit = 0;
+  for (const w of c) {
+    const stem = w.slice(0, Math.max(4, w.length - 2));
+    if (u.some(x => x.startsWith(stem) || w.startsWith(x.slice(0, Math.max(4, x.length - 2))))) hit++;
+  }
+  const score = hit / c.length;
+  return { ok: score >= 0.4, feedback: "Übereinstimmung mit der Musterlösung: " + Math.round(score * 100) + "%" };
+}
+async function aiCheckAnswer(question, correct, user) {
+  const prompt = `Du bist ein fairer Lehrer. Vergleiche die Schülerantwort mit der Musterlösung.
+Frage: ${question}
+Musterlösung: ${correct}
+Schülerantwort: ${user}
+Ist die Schülerantwort inhaltlich im Wesentlichen richtig? Andere Formulierungen sowie Sprech- oder Tippfehler sind ok – es zählt der Inhalt.
+Antworte NUR mit JSON: {"richtig": true, "feedback": "ein kurzer Satz Begründung"}`;
+  if (hasCowork()) {
+    const j = extractJson(coworkText(await window.cowork.askClaude(prompt, [user])), "{", "}");
+    if (!j) return null;
+    return { ok: !!(j.richtig !== undefined ? j.richtig : j.correct), feedback: String(j.feedback || "") };
+  }
+  try {
+    const j = await apiPost("/api/check", { question, correct, user });
+    return { ok: !!j.correct, feedback: String(j.feedback || "") };
+  } catch (e) { return null; }
+}
+async function checkAnswer() {
+  if (!session) return;
+  const card = deck().cards.find(c => c.id === session.order[session.idx]);
+  const user = (session.answerText || "").trim();
+  if (!user) { toast("Bitte zuerst eine Antwort eintippen oder einsprechen."); return; }
+  if (!card || !card.a) { toast("Diese Karte hat keine Musterlösung – bitte selbst bewerten."); session.flipped = true; renderStudy(); return; }
+  stopMic();
+  const btn = $("#checkBtn");
+  if (btn) { btn.disabled = true; btn.textContent = "Prüfe…"; }
+  let v = null;
+  try { v = await aiCheckAnswer(card.q, card.a, user); } catch (e) {}
+  if (!v) { v = localCheck(card.a, user); v.local = true; }
+  session.userAnswer = user;
+  session.verdict = v;
+  session.flipped = true;
+  renderStudy();
+}
+function setupMic(btn, ta) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    btn.style.opacity = ".35";
+    btn.title = "Spracheingabe wird von diesem Browser nicht unterstützt (Chrome, Edge oder Safari verwenden)";
+    btn.onclick = () => toast("Spracheingabe wird von diesem Browser nicht unterstützt.");
+    return;
+  }
+  btn.onclick = () => {
+    if (recog) { stopMic(); btn.classList.remove("rec"); return; }
+    recog = new SR();
+    recog.lang = "de-DE"; recog.interimResults = true; recog.continuous = true;
+    const base = ta.value ? ta.value.trim() + " " : "";
+    recog.onresult = ev => {
+      let fin = "", interim = "";
+      for (let i = 0; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (r.isFinal) fin += r[0].transcript + " "; else interim += r[0].transcript;
+      }
+      ta.value = (base + fin + interim).trim();
+      session.answerText = ta.value;
+    };
+    recog.onend = () => { recog = null; btn.classList.remove("rec"); };
+    recog.onerror = ev => {
+      recog = null; btn.classList.remove("rec");
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") toast("Mikrofon-Zugriff wurde blockiert – bitte im Browser erlauben.");
+    };
+    btn.classList.add("rec");
+    try { recog.start(); } catch (e) {}
+  };
+}
+
+function startSession(shuffle) {
+  const cards = deck().cards.filter(c => c.q);
+  let order = cards.map(c => c.id);
+  if (shuffle) for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  session = { order, idx: 0, right: 0, wrong: 0, total: order.length, flipped: false, answerText: "", userAnswer: "", verdict: null };
+  renderStudy();
+}
+
+function renderStudy() {
+  const el = $("#tab-study");
+  const d = deck();
+  if (!d.cards.length) {
+    el.innerHTML = `<div class="empty-state"><div class="big">📭</div><b>Noch keine Karten in diesem Stapel.</b><p style="margin:8px 0 16px;color:var(--muted)">Lade eine Datei hoch oder erstelle Karten selbst.</p>
+      <button class="btn primary" onclick="document.querySelector('[data-tab=import]').click()">⬆️ Import & KI</button></div>`;
+    return;
+  }
+  if (!session) {
+    el.innerHTML = `
+      <div class="done">
+        <div class="emoji">🎓</div>
+        <h2>${esc(d.name)}</h2>
+        <p>${d.cards.length} Karten bereit zum Lernen</p>
+        <div class="study-actions">
+          <button class="btn primary" id="startShuffled">🔀 Gemischt starten</button>
+          <button class="btn" id="startOrdered">📋 Der Reihe nach</button>
+        </div>
+      </div>`;
+    $("#startShuffled").onclick = () => startSession(true);
+    $("#startOrdered").onclick = () => startSession(false);
+    return;
+  }
+  if (session.idx >= session.order.length) {
+    const pct = session.total ? Math.round(session.right / (session.right + session.wrong || 1) * 100) : 0;
+    el.innerHTML = `
+      <div class="done">
+        <div class="emoji">${pct >= 80 ? "🏆" : pct >= 50 ? "💪" : "📚"}</div>
+        <h2>Runde geschafft!</h2>
+        <p>${pct}% gewusst</p>
+        <div class="stats">
+          <div class="stat"><b style="color:var(--green)">${session.right}</b><span>Gewusst</span></div>
+          <div class="stat"><b style="color:var(--red)">${session.wrong}</b><span>Nochmal</span></div>
+        </div>
+        <div class="study-actions">
+          <button class="btn primary" id="againBtn">🔁 Neue Runde</button>
+        </div>
+      </div>`;
+    $("#againBtn").onclick = () => { session = null; renderStudy(); };
+    return;
+  }
+  const card = deck().cards.find(c => c.id === session.order[session.idx]);
+  if (!card) { session.idx++; renderStudy(); return; }
+  const pos = session.idx + 1;
+  const v = session.verdict;
+  el.innerHTML = `
+    <div class="study-top">
+      <span class="pill">${pos} / ${session.order.length}</span>
+      <div class="progress"><div style="width:${(session.idx / session.order.length * 100).toFixed(1)}%"></div></div>
+      <span class="pill" style="color:var(--green)">✓ ${session.right}</span>
+      <span class="pill" style="color:var(--red)">↻ ${session.wrong}</span>
+      <button class="btn small ghost" id="quitBtn" title="Runde beenden">✕</button>
+    </div>
+    <div class="stage">
+      <div class="flashcard ${session.flipped ? "flipped" : ""}" id="flashcard">
+        <div class="face front">
+          <div class="tag">Frage</div>
+          <div class="txt">${esc(card.q)}</div>
+          <div class="hint">Antwort unten eingeben und prüfen lassen – oder Karte klicken zum Umdrehen</div>
+        </div>
+        <div class="face back">
+          <div class="tag">Antwort</div>
+          ${v ? `<div class="verdict ${v.ok ? "ok" : "no"}">${v.ok ? "✓ Richtig!" : "✗ Leider nicht ganz"}${v.feedback ? `<div class="fb">${esc(v.feedback)}</div>` : ""}${v.local ? `<div class="fb">(automatischer Textvergleich – KI-Prüfung nicht verfügbar)</div>` : ""}</div>` : ""}
+          <div class="txt">${card.a ? esc(card.a) : '<i style="color:var(--muted)">Noch keine Antwort hinterlegt – im Tab „Karten“ ergänzen.</i>'}</div>
+          ${v && session.userAnswer ? `<div class="useranswer"><b>Deine Antwort:</b> ${esc(session.userAnswer)}</div>` : `<div class="hint">Wie gut hast du es gewusst?</div>`}
+        </div>
+      </div>
+    </div>
+    ${v ? "" : `
+    <div class="answerbox">
+      <textarea id="answerInput" placeholder="Deine Antwort – eintippen oder mit 🎤 einsprechen… (Enter = prüfen)">${esc(session.answerText || "")}</textarea>
+      <div class="row">
+        <button class="mic" id="micBtn" title="Antwort einsprechen">🎤</button>
+        <div class="spacer"></div>
+        <button class="btn primary" id="checkBtn">Antwort prüfen</button>
+      </div>
+    </div>`}
+    <div class="study-actions">
+      ${v
+        ? `<button class="btn ${v.ok ? "wrong" : "right"}" id="overrideBtn">${v.ok ? "↻ Doch als falsch werten" : "✓ Doch als richtig werten"}</button>
+           <button class="btn primary" id="nextBtn">Weiter →</button>`
+        : `<button class="btn wrong" id="btnWrong">↻ Nochmal</button>
+           <button class="btn right" id="btnRight">✓ Gewusst</button>`}
+    </div>`;
+  $("#flashcard").onclick = () => { session.flipped = !session.flipped; $("#flashcard").classList.toggle("flipped", session.flipped); };
+  $("#quitBtn").onclick = () => { stopMic(); session = null; renderStudy(); };
+  if (v) {
+    $("#nextBtn").onclick = () => answer(v.ok);
+    $("#overrideBtn").onclick = () => answer(!v.ok);
+  } else {
+    $("#btnWrong").onclick = () => answer(false);
+    $("#btnRight").onclick = () => answer(true);
+    const ta = $("#answerInput");
+    ta.addEventListener("input", () => session.answerText = ta.value);
+    ta.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); checkAnswer(); } });
+    setupMic($("#micBtn"), ta);
+    $("#checkBtn").onclick = checkAnswer;
+  }
+}
+function answer(right) {
+  if (!session) return;
+  stopMic();
+  if (right) session.right++;
+  else { session.wrong++; session.order.push(session.order[session.idx]); }
+  session.idx++; session.flipped = false;
+  session.verdict = null; session.answerText = ""; session.userAnswer = "";
+  renderStudy();
+}
+document.addEventListener("keydown", e => {
+  if (activeTab !== "study" || !session || session.idx >= session.order.length) return;
+  if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+  if (e.code === "Space") { e.preventDefault(); $("#flashcard") && $("#flashcard").click(); }
+  if (e.key === "Enter" && session.verdict) { e.preventDefault(); answer(session.verdict.ok); return; }
+  if (e.key === "ArrowRight" || e.key === "2") answer(true);
+  if (e.key === "ArrowLeft" || e.key === "1") answer(false);
+});
+
+/* ============================================================
+   UI: Editor
+   ============================================================ */
+function renderEditor() {
+  const list = $("#cardList");
+  const d = deck();
+  const filter = ($("#searchBox").value || "").toLowerCase();
+  const cards = d.cards.filter(c => !filter || (c.q + " " + c.a).toLowerCase().includes(filter));
+  if (!cards.length) {
+    list.innerHTML = `<div class="empty-state"><div class="big">🃏</div>${d.cards.length ? "Keine Treffer." : "Noch keine Karten – füge welche hinzu oder nutze den Import."}</div>`;
+    return;
+  }
+  list.innerHTML = cards.map((c, i) => `
+    <div class="cardrow" data-id="${c.id}">
+      <div class="num">${i + 1}</div>
+      <div class="fields">
+        <label>Frage</label>
+        <textarea class="q-input" rows="1">${esc(c.q)}</textarea>
+        <label>Antwort ${c.a ? "" : '<span class="empty-note">· fehlt noch</span>'}</label>
+        <textarea class="a-input ${c.a ? "" : "empty-a"}" rows="2" placeholder="Antwort eingeben…">${esc(c.a)}</textarea>
+      </div>
+      <div class="rowbtns">
+        <button class="btn small ai-btn" title="Antwort von der KI vorschlagen lassen">✨ KI</button>
+        <button class="btn small ghost del-btn" title="Karte löschen">🗑️</button>
+      </div>
+    </div>`).join("");
+
+  list.querySelectorAll(".cardrow").forEach(row => {
+    const id = row.dataset.id;
+    const card = d.cards.find(c => c.id === id);
+    const qi = row.querySelector(".q-input"), ai = row.querySelector(".a-input");
+    const auto = ta => { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight + 2, 300) + "px"; };
+    [qi, ai].forEach(auto);
+    qi.addEventListener("input", () => { card.q = qi.value; auto(qi); save(); });
+    ai.addEventListener("input", () => { card.a = ai.value; ai.classList.toggle("empty-a", !ai.value.trim()); auto(ai); save(); });
+    row.querySelector(".del-btn").addEventListener("click", () => {
+      if (!confirm("Diese Karte löschen?")) return;
+      d.cards = d.cards.filter(c => c.id !== id);
+      save(); renderEditor(); renderHeader(); toast("Karte gelöscht");
+    });
+    row.querySelector(".ai-btn").addEventListener("click", async ev => {
+      const btn = ev.currentTarget;
+      btn.disabled = true; btn.textContent = "…";
+      try {
+        const q = `Beantworte die folgende Lern-/Prüfungsfrage kurz, korrekt und prüfungstauglich auf Deutsch. Antworte NUR mit der Antwort selbst, ohne Einleitung.
+Frage: ${card.q}` + (card.a ? `\nBisheriger Antwortentwurf (verbessern/vervollständigen): ${card.a}` : "");
+        let ans = "";
+        if (hasCowork()) {
+          ans = coworkText(await window.cowork.askClaude(q, [card.q])).trim();
+        } else {
+          const j = await apiPost("/api/answer", { question: card.q, draft: card.a || "" });
+          ans = (j && j.answer ? String(j.answer) : "").trim();
+        }
+        if (ans) { card.a = ans; save(); renderEditor(); toast("KI-Antwort eingefügt – bitte prüfen ✨"); return; }
+        toast("Keine Antwort erhalten.");
+      } catch (e) {
+        toast(e.message === "no-ai" ? "KI ist auf diesem Server nicht konfiguriert." : "KI-Fehler: " + e.message);
+      }
+      btn.disabled = false; btn.textContent = "✨ KI";
+    });
+  });
+}
+$("#searchBox").addEventListener("input", renderEditor);
+$("#addCard").addEventListener("click", () => {
+  deck().cards.unshift({ id: uid(), q: "", a: "" });
+  save(); $("#searchBox").value = ""; renderEditor(); renderHeader();
+  const ta = $("#cardList .q-input"); ta && ta.focus();
+});
+
+/* ============================================================
+   UI: Import
+   ============================================================ */
+let pendingCards = [];
+
+async function readFileText(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".docx")) return extractDocx(await file.arrayBuffer());
+  if (name.endsWith(".pptx")) return extractPptx(await file.arrayBuffer());
+  return file.text();
+}
+
+async function handleSource(text, sourceName) {
+  text = (text || "").trim();
+  if (!text) { toast("Kein Text gefunden."); return; }
+  const panel = $("#importResult"); panel.style.display = "block";
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  $("#importTitle").textContent = "Karten aus: " + sourceName;
+  $("#importDesc").textContent = text.length.toLocaleString("de") + " Zeichen gelesen";
+  $("#previewList").classList.remove("show"); $("#previewList").innerHTML = "";
+  $("#importActions").hidden = true;
+  $("#importWarn").classList.remove("show");
+  const st = $("#importStatus"); st.classList.add("show");
+  $("#importStatusTxt").textContent = "KI erstellt Karteikarten…";
+
+  let cards = [];
+  let usedAI = false;
+  try {
+    cards = await aiGenerateCards(text, m => $("#importStatusTxt").textContent = m);
+    usedAI = cards.length > 0;
+  } catch (e) { console.warn(e); }
+  if (!cards.length) {
+    cards = heuristicCards(text);
+    if (cards.length) {
+      $("#importWarn").textContent = aiMode === "off"
+        ? "Hinweis: Die KI ist auf diesem Server nicht konfiguriert. Die Karten wurden automatisch aus der Textstruktur erkannt (Fragen mit „?“). Du kannst sie im Tab „Karten“ bearbeiten."
+        : "Hinweis: Die KI-Generierung hat nicht geklappt – die Karten wurden stattdessen aus der Textstruktur erkannt.";
+      $("#importWarn").classList.add("show");
+    }
+  }
+  st.classList.remove("show");
+  if (!cards.length) {
+    $("#importWarn").textContent = "Es konnten keine Karten erstellt werden. Versuche es mit anderem Text oder formuliere Fragen mit „?“.";
+    $("#importWarn").classList.add("show");
+    return;
+  }
+  pendingCards = cards.map(c => ({ ...c, checked: true }));
+  renderPreview(usedAI);
+}
+
+function renderPreview(usedAI) {
+  const pl = $("#previewList");
+  pl.innerHTML = pendingCards.map((c, i) => `
+    <div class="prevcard">
+      <input type="checkbox" data-i="${i}" ${c.checked ? "checked" : ""}>
+      <div><div class="q">${esc(c.q)}</div><div class="a">${esc(c.a) || "<i>ohne Antwort</i>"}</div></div>
+    </div>`).join("");
+  pl.classList.add("show");
+  pl.querySelectorAll("input[type=checkbox]").forEach(cb =>
+    cb.addEventListener("change", () => pendingCards[+cb.dataset.i].checked = cb.checked));
+  $("#importDesc").textContent = pendingCards.length + " Karten " + (usedAI ? "von der KI erstellt ✨" : "erkannt") + " – Auswahl prüfen und übernehmen.";
+  const tgt = $("#importTarget");
+  tgt.innerHTML = `<option value="__new__">➕ Als neuen Stapel</option>` +
+    state.decks.map(d => `<option value="${d.id}">In „${esc(d.name)}“</option>`).join("");
+  $("#importActions").hidden = false;
+}
+
+$("#importConfirm").addEventListener("click", () => {
+  const chosen = pendingCards.filter(c => c.checked);
+  if (!chosen.length) { toast("Keine Karten ausgewählt."); return; }
+  const tgt = $("#importTarget").value;
+  let d;
+  if (tgt === "__new__") {
+    const base = $("#importTitle").textContent.replace(/^Karten aus:\s*/, "").replace(/\.(docx|pptx|txt|md)$/i, "") || "Neuer Stapel";
+    d = { id: uid(), name: base, cards: [] };
+    state.decks.push(d);
+  } else {
+    d = state.decks.find(x => x.id === tgt);
+  }
+  d.cards.push(...chosen.map(c => ({ id: uid(), q: c.q, a: c.a })));
+  state.activeDeckId = d.id;
+  save();
+  $("#importResult").style.display = "none";
+  pendingCards = [];
+  toast(chosen.length + " Karten übernommen 🎉");
+  document.querySelector("[data-tab=edit]").click();
+  renderHeader();
+});
+$("#importCancel").addEventListener("click", () => { $("#importResult").style.display = "none"; pendingCards = []; });
+
+const dz = $("#dropZone"), fi = $("#fileInput");
+dz.addEventListener("click", () => fi.click());
+dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("over"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("over"); if (e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); });
+fi.addEventListener("change", () => { if (fi.files[0]) processFile(fi.files[0]); fi.value = ""; });
+
+async function processFile(file) {
+  try {
+    toast("Lese „" + file.name + "“…");
+    const text = await readFileText(file);
+    await handleSource(text, file.name);
+  } catch (e) {
+    toast("Fehler beim Lesen: " + e.message);
+  }
+}
+$("#genFromPaste").addEventListener("click", () => handleSource($("#pasteArea").value, "Eigene Notizen"));
+
+/* ============================================================
+   Start
+   ============================================================ */
+function renderAll() { renderHeader(); renderStudy(); renderEditor(); }
+renderAll();
+</script>
+</body>
+</html>
