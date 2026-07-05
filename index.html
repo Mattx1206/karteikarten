@@ -941,6 +941,27 @@ $("#genFromPaste").addEventListener("click", () => handleSource($("#pasteArea").
    ============================================================ */
 function renderAll() { renderHeader(); renderStudy(); renderEditor(); }
 renderAll();
+
+/* --- Anonyme Besucherstatistik (nur auf der Online-Version aktiv) --- */
+(function () {
+  try {
+    let sid = sessionStorage.getItem("kk-sid");
+    const isNew = !sid;
+    if (!sid) { sid = uid(); sessionStorage.setItem("kk-sid", sid); }
+    const send = ev => {
+      try {
+        fetch("/api/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sid, event: ev }),
+          keepalive: true
+        }).catch(() => {});
+      } catch (e) {}
+    };
+    send(isNew ? "start" : "beat");
+    setInterval(() => { if (!document.hidden) send("beat"); }, 20000);
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>

@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Admin – Karteikarten</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f5fb; --card: #fff; --ink: #1d2033; --muted: #6b7089; --line: #e5e7f2;
+    --accent: #6366f1; --grad: linear-gradient(135deg, #6366f1, #8b5cf6);
+    --green: #10b981; --red: #ef4444;
+    --shadow: 0 8px 30px rgba(40,45,90,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 20px 60px; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; flex-wrap: wrap; }
+  .logo { width: 42px; height: 42px; border-radius: 12px; background: var(--grad); display: grid; place-items: center; color: #fff; font-size: 20px; box-shadow: var(--shadow); }
+  h1 { font-size: 20px; letter-spacing: -.02em; }
+  .sub { font-size: 12.5px; color: var(--muted); }
+  .spacer { flex: 1; }
+  .btn { border: 1px solid var(--line); background: #fff; padding: 9px 14px; border-radius: 10px; cursor: pointer; font: inherit; font-weight: 600; font-size: 13px; }
+  .btn.primary { background: var(--grad); color: #fff; border: none; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: var(--shadow); }
+  .card .label { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .card .value { font-size: 30px; font-weight: 800; margin-top: 6px; letter-spacing: -.02em; }
+  .card .value.online { color: var(--green); }
+
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); margin-bottom: 20px; }
+  .panel h2 { font-size: 15px; margin-bottom: 14px; }
+  .chartbox { height: 260px; position: relative; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 10px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: none; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-right: 8px; animation: blink 1.6s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .mono { font-family: ui-monospace, Consolas, monospace; }
+  .empty { color: var(--muted); text-align: center; padding: 24px; font-size: 13.5px; }
+  .err { background: #fdecec; color: #b42323; border-radius: 12px; padding: 12px 16px; font-size: 13.5px; font-weight: 600; margin-bottom: 16px; display: none; }
+  .err.show { display: block; }
+  .note { font-size: 11.5px; color: var(--muted); margin-top: 20px; line-height: 1.5; }
+
+  /* Login */
+  #gate { position: fixed; inset: 0; background: var(--bg); display: grid; place-items: center; z-index: 10; }
+  .gatebox { background: #fff; border: 1px solid var(--line); border-radius: 20px; box-shadow: var(--shadow); padding: 34px; width: min(360px, 90vw); text-align: center; }
+  .gatebox .logo { margin: 0 auto 14px; }
+  .gatebox input { width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 10px; font: inherit; margin: 16px 0 12px; }
+  .gatebox .hint { font-size: 12px; color: var(--muted); margin-top: 12px; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gatebox">
+    <div class="logo">🔐</div>
+    <h1>Admin-Dashboard</h1>
+    <div class="sub">Karteikarten – Besucherstatistik</div>
+    <input type="password" id="pw" placeholder="Admin-Passwort" autofocus>
+    <button class="btn primary" style="width:100%" id="loginBtn">Anmelden</button>
+    <div class="hint" id="gateHint">Passwort = Wert der Umgebungsvariable ADMIN_KEY in Vercel</div>
+  </div>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+  <header>
+    <div class="logo">📊</div>
+    <div>
+      <h1>Besucher-Dashboard</h1>
+      <div class="sub" id="lastUpdate">–</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn" id="refreshBtn">↻ Aktualisieren</button>
+    <button class="btn" id="logoutBtn">Abmelden</button>
+  </header>
+
+  <div class="err" id="errBox"></div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Gerade online</div><div class="value online" id="vOnline">–</div></div>
+    <div class="card"><div class="label">Besucher heute</div><div class="value" id="vToday">–</div></div>
+    <div class="card"><div class="label">Besuche gesamt</div><div class="value" id="vTotal">–</div></div>
+    <div class="card"><div class="label">Ø Verweildauer</div><div class="value" id="vAvg">–</div></div>
+  </div>
+
+  <div class="panel">
+    <h2>Besucher der letzten 14 Tage</h2>
+    <div class="chartbox"><canvas id="chart"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <h2><span class="dot"></span>Aktive Besucher (letzte 60 Sekunden)</h2>
+    <div id="onlineBox"></div>
+  </div>
+
+  <div class="note">
+    Hinweis: IP-Adressen sind personenbezogene Daten – dieses Dashboard ist nur für dich als Betreiber gedacht.
+    Erfasst werden anonyme Sitzungs-IDs, IP, Zeitstempel und aktive Nutzungszeit (Heartbeat alle 20&nbsp;Sekunden).
+    Daten aktualisieren sich automatisch alle 10&nbsp;Sekunden.
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+let chart = null;
+let timer = null;
+
+function fmtDur(sec) {
+  if (sec == null) return "–";
+  if (sec < 60) return sec + " s";
+  const m = Math.floor(sec / 60), s = sec % 60;
+  if (m < 60) return m + " min " + s + " s";
+  return Math.floor(m / 60) + " h " + (m % 60) + " min";
+}
+
+async function loadStats() {
+  const key = sessionStorage.getItem("kk-admin");
+  if (!key) return;
+  let r, j;
+  try {
+    r = await fetch("/api/stats", { headers: { "x-admin-key": key } });
+    j = await r.json();
+  } catch (e) {
+    showErr("Server nicht erreichbar."); return;
+  }
+  if (r.status === 401) { logout("Falsches Passwort."); return; }
+  if (!r.ok) { showErr(j && j.error ? j.error : "Fehler " + r.status); return; }
+
+  $("#errBox").classList.remove("show");
+  $("#gate").style.display = "none";
+  $("#app").style.display = "block";
+
+  $("#vOnline").textContent = j.geradeOnline;
+  $("#vToday").textContent = j.heute;
+  $("#vTotal").textContent = j.gesamtBesuche;
+  $("#vAvg").textContent = fmtDur(j.durchschnittSek);
+  $("#lastUpdate").textContent = "Stand: " + new Date().toLocaleTimeString("de-DE");
+
+  const labels = j.tage.map(t => t.datum.slice(8, 10) + "." + t.datum.slice(5, 7) + ".");
+  const data = j.tage.map(t => t.besucher);
+  if (!chart) {
+    chart = new Chart($("#chart"), {
+      type: "bar",
+      data: { labels, datasets: [{ label: "Besucher", data, backgroundColor: "rgba(99,102,241,.75)", borderRadius: 6 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    });
+  } else {
+    chart.data.labels = labels;
+    chart.data.datasets[0].data = data;
+    chart.update();
+  }
+
+  const box = $("#onlineBox");
+  if (!j.online.length) {
+    box.innerHTML = '<div class="empty">Gerade ist niemand auf der Seite.</div>';
+  } else {
+    box.innerHTML = '<table><thead><tr><th>#</th><th>IP-Adresse</th><th>Aktiv seit</th><th>Zuletzt gesehen</th></tr></thead><tbody>' +
+      j.online.map((o, i) =>
+        "<tr><td>" + (i + 1) + '</td><td class="mono">' + o.ip.replace(/</g, "&lt;") + "</td><td>" +
+        fmtDur(o.aktivSeitSek) + "</td><td>vor " + (o.zuletztVorSek == null ? "–" : o.zuletztVorSek + " s") + "</td></tr>"
+      ).join("") + "</tbody></table>";
+  }
+}
+
+function showErr(msg) {
+  $("#gate").style.display = "none";
+  $("#app").style.display = "block";
+  const e = $("#errBox"); e.textContent = msg; e.classList.add("show");
+}
+function logout(msg) {
+  sessionStorage.removeItem("kk-admin");
+  clearInterval(timer); timer = null;
+  $("#app").style.display = "none";
+  $("#gate").style.display = "grid";
+  if (msg) $("#gateHint").textContent = msg;
+}
+function login() {
+  const pw = $("#pw").value.trim();
+  if (!pw) return;
+  sessionStorage.setItem("kk-admin", pw);
+  loadStats();
+  if (!timer) timer = setInterval(loadStats, 10000);
+}
+
+$("#loginBtn").addEventListener("click", login);
+$("#pw").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
+$("#refreshBtn").addEventListener("click", loadStats);
+$("#logoutBtn").addEventListener("click", () => logout());
+
+if (sessionStorage.getItem("kk-admin")) {
+  loadStats();
+  timer = setInterval(loadStats, 10000);
+}
+</script>
+</body>
+</html>
